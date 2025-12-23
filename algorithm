@@ -1,0 +1,142 @@
+import numpy as np
+import sounddevice as sd
+import tensorflow as tf
+import csv
+import sys
+import time
+
+# --- Configuration ---
+MODEL_PATH = "yamnet.tflite"
+CLASS_MAP_PATH = "yamnet_class_map.csv"
+SAMPLE_RATE = 16000
+BUFFER_SIZE = 15600
+
+# Detection Threshold
+DETECTION_THRESHOLD = 0.35 
+
+# === Configuration: Timer Logic ===
+# Cooldown duration in seconds to hold the alert active
+SIREN_COOLDOWN_SECONDS = 6.0 
+
+# === Configuration: Extended Detection List ===
+# Includes classes that might overlap with sirens or misclassify slow sirens
+TARGET_SOUNDS = [
+    "Siren", 
+    "Police car (siren)", 
+    "Ambulance (siren)", 
+    "Fire engine, fire truck (siren)", 
+    "Emergency vehicle",
+    "Civil defense siren",  # Slow rising/falling tone
+    "Alarm",                # General category often triggered by sirens
+    "Vehicle horn, car horn, honking" # Air sirens sometimes trigger this class
+]
+
+# --- Load Data and Model ---
+def load_labels(csv_path):
+    class_names = []
+    try:
+        with open(csv_path, 'r') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                class_names.append(row[2])
+        return class_names
+    except Exception as e:
+        print(f"Error labels: {e}")
+        sys.exit(1)
+
+class_names = load_labels(CLASS_MAP_PATH)
+
+try:
+    interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+    interpreter.allocate_tensors()
+except Exception as e:
+    print(f"Error model: {e}")
+    sys.exit(1)
+
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+input_index = input_details[0]['index']
+output_index = output_details[0]['index']
+
+last_siren_time = 0
+is_alert_active = False
+
+print("\n=== SIREN DETECTOR (EXTENDED) ===")
+print(f"Listening... Alert holds for {SIREN_COOLDOWN_SECONDS}s.")
+print("=================================\n")
+
+def audio_callback(indata, frames, t, status):
+    global last_siren_time, is_alert_active
+    
+    audio_data = np.squeeze(indata).astype(np.float32)
+    if audio_data.ndim > 1: audio_data = audio_data.flatten()
+    
+    peak = np.max(np.abs(audio_data))
+    
+    input_data = audio_data[:BUFFER_SIZE]
+    interpreter.set_tensor(input_index, input_data)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_index)
+    prediction = output_data[0]
+    
+    current_siren_detected = False
+    current_max_score = 0
+    detected_label = ""
+
+    # Check against the extended target list
+    for i, score in enumerate(prediction):
+        if class_names[i] in TARGET_SOUNDS:
+            if score > DETECTION_THRESHOLD:
+                # Store the highest scoring label for display
+                if score > current_max_score:
+                    current_max_score = score
+                    detected_label = class_names[i]
+                current_siren_detected = True
+
+    # --- State Machine / Memory Logic ---
+    current_time = time.time()
+    
+    if current_siren_detected:
+        last_siren_time = current_time
+        is_alert_active = True
+    elif (current_time - last_siren_time) > SIREN_COOLDOWN_SECONDS:
+        is_alert_active = False
+
+    # --- Console Output ---
+    print("\033[H\033[J") 
+    
+    if is_alert_active:
+        time_left = SIREN_COOLDOWN_SECONDS - (current_time - last_siren_time)
+        if time_left < 0: time_left = SIREN_COOLDOWN_SECONDS
+        
+        print("\n\n")
+        print("    🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨")
+        print("    🚨    SIREN ALERT ACTIVE    🚨")
+        print("    🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨")
+        print(f"\n    Time remaining: {time_left:.1f}s")
+        if current_siren_detected:
+             print(f"    (Detected: {detected_label} - {int(current_max_score*100)}%)")
+        else:
+             print(f"    (Signal lost, holding alert...)")
+             
+    else:
+        print("\n")
+        print("        Status: Scanning...")
+        print("        ...................")
+        top_idx = prediction.argmax()
+        print(f"        Heard: {class_names[top_idx]} ({int(prediction[top_idx]*100)}%)")
+        
+        # Debug: Print 2nd and 3rd candidates for analysis
+        top_3 = prediction.argsort()[-3:][::-1]
+        print(f"        Alternative 2: {class_names[top_3[1]]} ({int(prediction[top_3[1]]*100)}%)")
+        print(f"        Alternative 3: {class_names[top_3[2]]} ({int(prediction[top_3[2]]*100)}%)")
+    
+    bar_len = 20
+    filled = int(peak * bar_len)
+    bar = '#' * filled + '-' * (bar_len - filled)
+    print(f"\n        Mic: [{bar}]")
+
+with sd.InputStream(channels=1, samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE, callback=audio_callback):
+    while True:
+        pass
