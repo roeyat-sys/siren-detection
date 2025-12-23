@@ -1,34 +1,65 @@
 graph LR
-    %% Style Definitions
-    classDef pwr fill:#ffcccc,stroke:#ff0000,stroke-width:2px;
-    classDef rpi fill:#d4edda,stroke:#28a745,stroke-width:2px;
-    classDef mic fill:#cce5ff,stroke:#004085,stroke-width:2px;
-    classDef wire stroke:#333,stroke-width:1px;
+    graph LR
+    %% Style Definitions - Clean and Professional Look
+    classDef pwr fill:#ffffff,stroke:#000000,stroke-width:2px;
+    classDef rpi fill:#f9f9f9,stroke:#000000,stroke-width:2px;
+    classDef mic fill:#e6f3ff,stroke:#000000,stroke-width:2px;
+    classDef pin fill:#ffffff,stroke:none,font-size:10px;
 
-    %% --- Components ---
-    subgraph PowerUnit ["Power Supply (Source)"]
-        Wall["Wall Socket 220V"]:::pwr --> Adapter["27W USB-C PD Adapter"]:::pwr
+    %% --- Component 1: Power Supply ---
+    subgraph PowerUnit ["Power Supply Unit (PSU)"]
+        direction TB
+        Adapter["AC/DC Adapter<br/>Output: 5V / 5A"]:::pwr
+        
+        %% USB-C Connector Details
+        subgraph USB_C_Plug ["USB-C Plug"]
+            P_VBUS["Pin A4/B4: VBUS"]:::pin
+            P_GND["Pin A1/B1: GND"]:::pin
+        end
+        
+        Adapter --- P_VBUS
+        Adapter --- P_GND
     end
 
+    %% --- Component 2: Raspberry Pi ---
     subgraph RPi ["Main Controller (Raspberry Pi 5)"]
-        USB_C["USB-C Power Port"]:::rpi
-        USB_A["USB 3.0 Port Type A"]:::rpi
+        direction TB
+        
+        %% Power Input
+        subgraph RPi_Power ["USB-C Power Input"]
+            R_VBUS["VBUS"]:::pin
+            R_GND["GND"]:::pin
+        end
+
+        %% Processor / CPU
         CPU["Broadcom BCM2712"]:::rpi
+
+        %% USB Port for Microphone
+        subgraph USB_Port ["USB 3.0 Type-A Receptacle"]
+            direction TB
+            U_1["Pin 1: VCC (+5V)"]:::pin
+            U_2["Pin 2: D- (Data)"]:::pin
+            U_3["Pin 3: D+ (Data)"]:::pin
+            U_4["Pin 4: GND"]:::pin
+        end
+        
+        %% Internal Connections
+        R_VBUS --- CPU
+        U_1 --- CPU
     end
 
-    subgraph AudioIn ["Input Peripheral"]
-        Mic["USB Microphone"]:::mic
+    %% --- Component 3: Microphone ---
+    subgraph AudioIn ["Peripheral: USB Microphone"]
+        Mic_Plug["USB Type-A Connector"]:::mic
     end
 
-    %% --- Connections ---
-    Adapter == "VBUS (5.1V / 5A)" ==> USB_C
+    %% --- External Wiring (Schematic Connections) ---
+    %% Power Connection
+    P_VBUS ==>|"5.1V DC"| R_VBUS
+    P_GND ==>|"Return"| R_GND
 
-    %% USB Connection Details (Moved Mic slightly left for better layout)
-    USB_A -- "VBUS (5V)" --- Mic
-    USB_A -- "D- (Data Minus)" --- Mic
-    USB_A -- "D+ (Data Plus)" --- Mic
-    USB_A -- "GND" --- Mic
-
-    %% Internal Connections
-    USB_C -.- CPU
-    USB_A -.- CPU
+    %% Microphone Connection (Including Pinout)
+    U_1 ---|"Red (VBUS)"| Mic_Plug
+    U_2 ---|"White (D-)"| Mic_Plug
+    U_3 ---|"Green (D+)"| Mic_Plug
+    U_4 ---|"Black (GND)"| Mic_Plug
