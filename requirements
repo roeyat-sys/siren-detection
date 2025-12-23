@@ -1,0 +1,14 @@
+# Core Dependencies
+numpy>=1.21.0
+sounddevice>=0.4.6
+
+# AI Engine
+# Note: On Raspberry Pi, it is recommended to use 'tflite-runtime' to save resources.
+# On a powerful PC, you can use the full 'tensorflow' library.
+# Uncomment the line relevant to your hardware:
+
+# Option A: For Raspberry Pi (Recommended)
+tflite-runtime>=2.5.0
+
+# Option B: For Desktop PC / Laptop (Development)
+# tensorflow>=2.10.0
