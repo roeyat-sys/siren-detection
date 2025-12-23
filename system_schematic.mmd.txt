@@ -1,0 +1,34 @@
+graph LR
+    %% Style Definitions
+    classDef pwr fill:#ffcccc,stroke:#ff0000,stroke-width:2px;
+    classDef rpi fill:#d4edda,stroke:#28a745,stroke-width:2px;
+    classDef mic fill:#cce5ff,stroke:#004085,stroke-width:2px;
+    classDef wire stroke:#333,stroke-width:1px;
+
+    %% --- Components ---
+    subgraph PowerUnit ["Power Supply (Source)"]
+        Wall["Wall Socket 220V"]:::pwr --> Adapter["27W USB-C PD Adapter"]:::pwr
+    end
+
+    subgraph RPi ["Main Controller (Raspberry Pi 5)"]
+        USB_C["USB-C Power Port"]:::rpi
+        USB_A["USB 3.0 Port Type A"]:::rpi
+        CPU["Broadcom BCM2712"]:::rpi
+    end
+
+    subgraph AudioIn ["Input Peripheral"]
+        Mic["USB Microphone"]:::mic
+    end
+
+    %% --- Connections ---
+    Adapter == "VBUS (5.1V / 5A)" ==> USB_C
+
+    %% USB Connection Details (Moved Mic slightly left for better layout)
+    USB_A -- "VBUS (5V)" --- Mic
+    USB_A -- "D- (Data Minus)" --- Mic
+    USB_A -- "D+ (Data Plus)" --- Mic
+    USB_A -- "GND" --- Mic
+
+    %% Internal Connections
+    USB_C -.- CPU
+    USB_A -.- CPU
